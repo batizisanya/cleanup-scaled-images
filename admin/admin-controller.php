@@ -14,92 +14,94 @@ add_action( 'wp_ajax_csi_run_delete_action', 'csi_run_delete_action' );
  */
 
 function csi_run_search_action() {
+  check_ajax_referer( 'csi-admin', 'nonce' );
 
   // ajax variables
   $html    = '';
   $message = '';
   
   // local variables
-  $query_images   = csi_get_query_images();
-  $sorted_images  = array();
-  $saved_space    = 0;
-  $counter        = 0;
-  
-  foreach ( $query_images->posts as $image_post) {
-    $id   = $image_post->ID;
-    $data = wp_get_attachment_metadata( $id );
+  $saved_space = 0;
+  $counter     = 0;
+  $table_open  = false;
+  $paged       = 1;
+  $per_page    = 200;
 
-    // skip not an image attachment
-    if ( !isset($data['file']) || !isset($data['image_meta']) ) continue;
+  ob_start();
 
-    // target scaled images
-    if ( preg_match('/-scaled/', $data['file'] ) && isset( $data['original_image'] ) ) {
-      
-      $original_image_url  = wp_get_original_image_url( $id );
-      $original_image_path = wp_get_original_image_path( $id );
-      $original_thumb_url  = wp_get_attachment_thumb_url( $id );
-      $saved_space += filesize( $original_image_path );
-      $counter++;
+  do {
+    $query_images = csi_get_query_images( $paged, $per_page );
 
-      $sorted_images[$id]['thumb'] = $original_thumb_url;
-      $sorted_images[$id]['original_image_url'] = $original_image_url;
-      $sorted_images[$id]['filesize'] = filesize( $original_image_path );
+    foreach ( $query_images->posts as $id ) {
+      $data = wp_get_attachment_metadata( $id );
 
-    };
+      // skip not an image attachment
+      if ( ! isset( $data['file'] ) || ! isset( $data['image_meta'] ) ) {
+        continue;
+      }
 
+      // target scaled images
+      if ( preg_match( '/-scaled/', $data['file'] ) && isset( $data['original_image'] ) ) {
+        $original_image_url  = wp_get_original_image_url( $id );
+        $original_image_path = wp_get_original_image_path( $id );
+        if ( ! $original_image_path || ! file_exists( $original_image_path ) ) {
+          continue;
+        }
+        $original_thumb_url  = wp_get_attachment_thumb_url( $id );
+        $saved_space += filesize( $original_image_path );
+        $counter++;
+
+        if ( ! $table_open ) {
+          echo '<table class="wp-list-table widefat striped table-view-list media">';
+          $table_open = true;
+        }
+
+        ?>
+          <tr>
+            <th width="50">
+                <a href="<?php echo esc_url( $original_image_url ); ?>" target="_blank" rel="noopener">
+                  <img src="<?php echo esc_url( $original_thumb_url ); ?>" alt="thumb" width="50">
+                </a>
+            </th>
+            <td>
+            <span>
+            <?php echo esc_html( $original_image_url . ' (' . csi_filesize_formatted( null, filesize( $original_image_path ) ) . ')' ); ?>
+            </span>
+            </td>
+          </tr>
+        <?php
+
+      };
+    }
+    $paged++;
+  } while ( $paged <= $query_images->max_num_pages );
+
+  if ( $table_open ) {
+    echo '</table>';
+    echo '<style>.scaledImages table td {vertical-align: middle;}</style>';
   }
-
-
-  // sort array
-  usort($sorted_images, function($a, $b) {
-    return $b['filesize'] - $a['filesize'];
-  });
-
 
   // create result
   if( $counter > 0 ) {
 
-    $message = csi_message('Found '.$counter.' files ( '. csi_filesize_formatted(null, $saved_space) . ' )' );
-      
-      ob_start();
-  
-      echo '<table class="wp-list-table widefat striped table-view-list media">';
-      foreach ($sorted_images as $image):
-        ?>
-        <tr>
-          <th width="50">
-              <a href="<?php echo $image['original_image_url']; ?>" target="_blank">
-                <img src="<?php echo $image['thumb']; ?>" alt="thumb" width="50">
-              </a>
-          </th>
-          <td>
-          <span>
-          <?php print_r( $image['original_image_url'] . ' (' . csi_filesize_formatted( null, $image['filesize'] ) . ')'); ?>
-          </span>
-          </td>
-        </tr>
-        <?php
-      endforeach;
-      echo '</table>';
-      echo '<style>.scaledImages table td {vertical-align: middle;}</style>';
-
-      $html = ob_get_clean();
+    $message = csi_message( 'Found ' . $counter . ' files ( ' . csi_filesize_formatted( null, $saved_space ) . ' )' );
+    $html = ob_get_clean();
 
   } else {
     
-    $message = csi_message('Nothing found, all files are sorted.');
+    $message = csi_message( 'Nothing found, all files are sorted.' );
+    ob_end_clean();
 
   }
   
   // ajax return multiple elements;
-  echo json_encode(
-      array(
-        "message" => $message,
-        "html"  => $html
-      )
-    );
+  wp_send_json(
+    array(
+      'message' => $message,
+      'html'    => $html,
+    )
+  );
   
-  wp_die(); // this is required to terminate immediately and return a proper response
 }
 
 
@@ -111,6 +113,7 @@ function csi_run_search_action() {
  */
 
 function csi_run_delete_action() {
+  check_ajax_referer( 'csi-admin', 'nonce' );
 
   // ajax variables
   $html    = '';
@@ -118,64 +121,71 @@ function csi_run_delete_action() {
   $message = '';
   
   // local variables
-  $query_images = csi_get_query_images();
+  $paged       = 1;
+  $per_page    = 200;
   $saved_space  = 0;
   $counter      = 0;
 
   ob_start();
 
-  foreach ( $query_images->posts as $image_post) {
-    $id = $image_post->ID;
-    $data = wp_get_attachment_metadata( $id );
+  do {
+    $query_images = csi_get_query_images( $paged, $per_page );
 
-    // check if not an image attachment
-    if ( !isset($data['file']) || !isset($data['image_meta']) ) continue;
+    foreach ( $query_images->posts as $id ) {
+      $data = wp_get_attachment_metadata( $id );
 
-    // target scaled images
-    if ( preg_match('/-scaled/', $data['file'] ) && isset( $data['original_image'] ) ) {
+      // check if not an image attachment
+      if ( ! isset( $data['file'] ) || ! isset( $data['image_meta'] ) ) {
+        continue;
+      }
 
-      $original_image_url = wp_get_original_image_url( $id );
-      $original_image_path = wp_get_original_image_path( $id );
-      $saved_space += filesize( $original_image_path );
-      $counter++;
+      // target scaled images
+      if ( preg_match( '/-scaled/', $data['file'] ) && isset( $data['original_image'] ) ) {
 
-      // Print data for delete
-      echo '<pre>';
-      print_r( $data['original_image'] . ' (' . csi_filesize_formatted( $original_image_path ) . ')');
-      echo '</pre>';
+        $original_image_path = wp_get_original_image_path( $id );
+        if ( ! $original_image_path || ! file_exists( $original_image_path ) ) {
+          continue;
+        }
+        $saved_space += filesize( $original_image_path );
+        $counter++;
 
-      // Delete data
-      wp_delete_file( $original_image_path ); // delete file here
-      unset( $data['original_image'] ); // unset original_image from attachment_metadata
-      wp_update_attachment_metadata($id, $data); // update changes to attachment;
+        // Print data for delete
+        echo '<pre>';
+        echo esc_html( $data['original_image'] . ' (' . csi_filesize_formatted( $original_image_path ) . ')' );
+        echo '</pre>';
 
-    };
+        // Delete data
+        wp_delete_file( $original_image_path ); // delete file here
+        unset( $data['original_image'] ); // unset original_image from attachment_metadata
+        wp_update_attachment_metadata( $id, $data ); // update changes to attachment;
 
-  }
+      };
+
+    }
+    $paged++;
+  } while ( $paged <= $query_images->max_num_pages );
 
   $buffer = ob_get_clean();
 
   if( $saved_space > 0 ) {
 
-    $message = csi_message('Deleted '.$counter.' files ( '. csi_filesize_formatted(null, $saved_space).' )', 'success');
+    $message = csi_message( 'Deleted ' . $counter . ' files ( ' . csi_filesize_formatted( null, $saved_space ) . ' )', 'success' );
     
     $html = '<h3>Log</h3>' . $buffer;
   
   } else {
 
-    $message = csi_message('Nothing to delete, all files are sorted.', 'info');
+    $message = csi_message( 'Nothing to delete, all files are sorted.', 'info' );
 
   }
 
   // ajax return multiple elements;
-  echo json_encode(
-      array(
-        "message"  => $message,
-        "html"     => $html
-      )
-    );
-
-  wp_die(); // this is required to terminate immediately and return a proper response
+  wp_send_json(
+    array(
+      'message'  => $message,
+      'html'     => $html,
+    )
+  );
 }
 
 
@@ -195,16 +205,18 @@ function csi_auto_delete_original( $data, $attachment_id ) {
   if ( $auto_delete ) {
 
     // check if an image attachment
-    if ( isset($data['file']) || isset($data['image_meta']) ) {
+    if ( isset( $data['file'] ) && isset( $data['image_meta'] ) ) {
 
       // check if image is scaled
-      if ( preg_match('/-scaled/', $data['file'] ) && isset( $data['original_image'] ) ) {
+      if ( preg_match( '/-scaled/', $data['file'] ) && isset( $data['original_image'] ) ) {
 
         $original_image_path  = wp_get_original_image_path( $attachment_id );
 
         // Perform Delete
-        wp_delete_file( $original_image_path ); // delete file here
-        unset( $data['original_image'] ); // unset original_image from attachment_metadata
+        if ( $original_image_path && file_exists( $original_image_path ) ) {
+          wp_delete_file( $original_image_path ); // delete file here
+          unset( $data['original_image'] ); // unset original_image from attachment_metadata
+        }
 
       }
 
@@ -238,19 +250,19 @@ function csi_max_image_size( $file ) {
   // $not_exclude    = ! in_array( $user, $exclude_users );
 
   // execute if limit is enabled
-  if ( $limit_size && $file_size) {
+  if ( $limit_size && $file_size ) {
       
       $size     = $file['size'];
       $size     = $size / (1024 * 1024) ; // MB
-      $limit    = $file_size; // set your limit
+      $limit    = (float) $file_size; // set your limit
 
       $type     = $file['type'];
       $is_image = strpos( $type, 'image' ) !== false;
       
       if ( $is_image && $size > $limit ) {
         
-        $limit_output = $limit.'MB';
-        $size_output  = round($size, 0).'MB';
+        $limit_output = $limit . 'MB';
+        $size_output  = round( $size, 0 ) . 'MB';
 
         $file['error'] = "Nope! Image file size is $size_output, must be smaller than $limit_output";
       }
@@ -264,12 +276,15 @@ function csi_max_image_size( $file ) {
 
 // UTILITY FUNCTIONS
 
-function csi_get_query_images() {
+function csi_get_query_images( $paged = 1, $per_page = 200 ) {
   $query_images_args = array(
     'post_type' => 'attachment',
     'post_mime_type' =>'image',
     'post_status' => 'inherit',
-    'posts_per_page' => -1,
+    'posts_per_page' => $per_page,
+    'paged' => $paged,
+    'fields' => 'ids',
+    'no_found_rows' => false,
   );
 
   $query_images = new WP_Query( $query_images_args );

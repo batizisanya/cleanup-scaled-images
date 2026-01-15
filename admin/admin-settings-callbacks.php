@@ -11,10 +11,15 @@ if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 function csi_callback_validate_options($input) {
 		
 	// checkbox 
-	if ( ! isset( $input['limit_upload'] ) ) {
-		$input['limit_upload'] = null;
+	if ( ! isset( $input['auto_delete'] ) ) {
+		$input['auto_delete'] = null;
 	}
-	$input['limit_upload'] = ($input['limit_upload'] == 1 ? 1 : 0);
+	$input['auto_delete'] = ( $input['auto_delete'] == 1 ? 1 : 0 );
+
+	if ( ! isset( $input['limit_size'] ) ) {
+		$input['limit_size'] = null;
+	}
+	$input['limit_size'] = ( $input['limit_size'] == 1 ? 1 : 0 );
 
 
 	// file_size
