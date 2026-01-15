@@ -49,7 +49,8 @@ require_once plugin_dir_path(__FILE__) . 'admin/admin-settings-callbacks.php';
 function csi_options_default() {
 
   return array(
-    'limit_upload' => false,
+    'auto_delete'  => false,
+    'limit_size'   => false,
     'file_size'    => '5',
   );
 
