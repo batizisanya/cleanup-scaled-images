@@ -4,8 +4,8 @@
  
 Plugin Name:  Cleanup Scaled Images
 Description:  Delete original file for scaled images to make the project lighter.
-Version:      1.0.0
-Author:       Andrius Sokoklnikovas
+Version:      2.0.0
+Author:       Andrius Sokoklnikovas, Sandor Batizi
 Author URI:   https://andriussok.lt
 License:      GPLv2
 License URI:  https://www.gnu.org/licenses/gpl-2.0.html
@@ -49,7 +49,8 @@ require_once plugin_dir_path(__FILE__) . 'admin/admin-settings-callbacks.php';
 function csi_options_default() {
 
   return array(
-    'limit_upload' => false,
+    'auto_delete'  => false,
+    'limit_size'   => false,
     'file_size'    => '5',
   );
 

@@ -39,8 +39,8 @@ if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
             ! confirm("Are you sure you want to delete files?")
             ){ return false; }
 
-          const ajaxurl = "<?php echo admin_url('admin-ajax.php'); ?>";
-          let nonce = "<?php echo wp_create_nonce('ajax-nonce'); ?>";
+          const ajaxurl = "<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>";
+          let nonce = "<?php echo esc_js( wp_create_nonce( 'csi-admin' ) ); ?>";
           let data =  {
             'action': buttonAction,
             'nonce' : nonce
@@ -63,5 +63,4 @@ if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
     }); 
   </script>
 <?php
-
 
