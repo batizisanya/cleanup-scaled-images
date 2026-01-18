@@ -21,13 +21,12 @@ function csi_run_search_action() {
   $message = '';
   
   // local variables
-  $query_images   = csi_get_query_images();
   $sorted_images  = array();
   $saved_space    = 0;
   $counter        = 0;
-  
-  foreach ( $query_images->posts as $image_post) {
-    $id   = $image_post->ID;
+
+  csi_walk_image_attachments(
+    function( $id ) use ( &$sorted_images, &$saved_space, &$counter ) {
     $data = wp_get_attachment_metadata( $id );
 
     // skip not an image attachment
@@ -41,19 +40,21 @@ function csi_run_search_action() {
       $original_image_url  = wp_get_original_image_url( $id );
       $original_image_path = wp_get_original_image_path( $id );
       if ( ! $original_image_path || ! file_exists( $original_image_path ) ) {
-        continue;
+        return;
       }
       $original_thumb_url  = wp_get_attachment_thumb_url( $id );
-      $saved_space += filesize( $original_image_path );
+      $filesize = filesize( $original_image_path );
+      $saved_space += $filesize;
       $counter++;
 
       $sorted_images[ $id ]['thumb'] = $original_thumb_url;
       $sorted_images[ $id ]['original_image_url'] = $original_image_url;
-      $sorted_images[ $id ]['filesize'] = filesize( $original_image_path );
+      $sorted_images[ $id ]['filesize'] = $filesize;
 
     };
 
-  }
+    }
+  );
 
 
   // sort array
@@ -124,14 +125,13 @@ function csi_run_delete_action() {
   $message = '';
   
   // local variables
-  $query_images = csi_get_query_images();
   $saved_space  = 0;
   $counter      = 0;
 
   ob_start();
 
-  foreach ( $query_images->posts as $image_post) {
-    $id = $image_post->ID;
+  csi_walk_image_attachments(
+    function( $id ) use ( &$saved_space, &$counter ) {
     $data = wp_get_attachment_metadata( $id );
 
     // check if not an image attachment
@@ -145,14 +145,15 @@ function csi_run_delete_action() {
       $original_image_url = wp_get_original_image_url( $id );
       $original_image_path = wp_get_original_image_path( $id );
       if ( ! $original_image_path || ! file_exists( $original_image_path ) ) {
-        continue;
+        return;
       }
-      $saved_space += filesize( $original_image_path );
+      $filesize = filesize( $original_image_path );
+      $saved_space += $filesize;
       $counter++;
 
       // Print data for delete
       echo '<pre>';
-      echo esc_html( $data['original_image'] . ' (' . csi_filesize_formatted( $original_image_path ) . ')' );
+      echo esc_html( $data['original_image'] . ' (' . csi_filesize_formatted( null, $filesize ) . ')' );
       echo '</pre>';
 
       // Delete data
@@ -162,7 +163,8 @@ function csi_run_delete_action() {
 
     };
 
-  }
+    }
+  );
 
   $buffer = ob_get_clean();
 
@@ -275,17 +277,38 @@ function csi_max_image_size( $file ) {
 
 // UTILITY FUNCTIONS
 
-function csi_get_query_images() {
-  $query_images_args = array(
-    'post_type' => 'attachment',
-    'post_mime_type' =>'image',
-    'post_status' => 'inherit',
-    'posts_per_page' => -1,
-  );
+function csi_walk_image_attachments( $callback ) {
+  if ( ! is_callable( $callback ) ) {
+    return;
+  }
 
-  $query_images = new WP_Query( $query_images_args );
+  $paged = 1;
+  do {
+    $query_images = new WP_Query(
+      array(
+        'post_type'              => 'attachment',
+        'post_mime_type'         => 'image',
+        'post_status'            => 'inherit',
+        'posts_per_page'         => 250,
+        'paged'                  => $paged,
+        'fields'                 => 'ids',
+        'no_found_rows'          => true,
+        'update_post_meta_cache' => false,
+        'update_post_term_cache' => false,
+      )
+    );
 
-  return $query_images;
+    if ( empty( $query_images->posts ) ) {
+      break;
+    }
+
+    foreach ( $query_images->posts as $id ) {
+      $callback( $id );
+    }
+
+    $paged++;
+    wp_reset_postdata();
+  } while ( ! empty( $query_images->posts ) );
 }
 
 /**
