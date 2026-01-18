@@ -31,7 +31,7 @@ function csi_run_search_action() {
 
     // skip not an image attachment
     if ( ! isset( $data['file'] ) || ! isset( $data['image_meta'] ) ) {
-      continue;
+      return;
     }
 
     // target scaled images
@@ -136,7 +136,7 @@ function csi_run_delete_action() {
 
     // check if not an image attachment
     if ( ! isset( $data['file'] ) || ! isset( $data['image_meta'] ) ) {
-      continue;
+      return;
     }
 
     // target scaled images
